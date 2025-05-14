@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎯 Target Clicker Lobby</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      font-family: 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at center, #1a1a1a, #111);
+      color: white;
+      overflow: hidden;
+    }
+    .screen {
+      display: none;
+      width: 100%;
+      height: 100%;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+    .active {
+      display: flex;
+    }
+    .button {
+      background: #333;
+      border: none;
+      padding: 20px 40px;
+      margin: 15px;
+      border-radius: 12px;
+      font-size: 24px;
+      color: white;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .button:hover {
+      background: #555;
+    }
+    .target {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      background: red;
+      border-radius: 50%;
+      transition: all 0.3s ease;
+    }
+    .target:active {
+      transform: scale(0.8);
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+    }
+    #score, #coins {
+      font-size: 20px;
+      margin: 5px;
+    }
+    #leaderboard, #shop, #settings, #inventory {
+      background: rgba(0,0,0,0.6);
+      padding: 20px;
+      border-radius: 12px;
+      text-align: left;
+    }
+    #shop button, #settings button, #inventory button {
+      display: block;
+      width: 100%;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <audio id="bgm" src="https://www.bensound.com/bensound-music/bensound-funnysong.mp3" autoplay loop></audio>
+  <audio id="clickSound" src="https://www.soundjay.com/buttons/sounds/button-16.mp3"></audio>
+
+  <div id="lobby" class="screen active">
+    <h1>🎯 Target Clicker</h1>
+    <button class="button" onclick="playClick(); startGame()">Грати</button>
+    <button class="button" onclick="playClick(); showScreen('leaderboard')">Таблиця</button>
+    <button class="button" onclick="playClick(); showScreen('shop')">Магазин</button>
+    <button class="button" onclick="playClick(); showScreen('settings')">Налаштування</button>
+    <button class="button" onclick="playClick(); showScreen('inventory')">Інвентар</button>
+  </div>
+
+  <div id="game" class="screen">
+    <div id="ui">
+      <div id="score">Очки: 0</div>
+      <div id="coins">Монети: 0</div>
+    </div>
+  </div>
+
+  <div id="leaderboard" class="screen"></div>
+  <div id="shop" class="screen">
+    <h2>🛍️ Магазин</h2>
+    <button onclick="buyUpgrade('doublePoints')">✴️ Подвійні очки (10 монет)</button>
+    <button onclick="buySkin('blue')">🔵 Скін: синя мішень (15 монет)</button>
+    <button class="button" onclick="showScreen('lobby')">Назад</button>
+  </div>
+  <div id="settings" class="screen">
+    <h2>⚙️ Налаштування</h2>
+    <button onclick="toggleMusic()">🎵 Увімк/Вимк музику</button>
+    <button onclick="toggleFullscreen()">🔳 На весь екран</button>
+    <button onclick="resetProgress()">♻️ Скинути прогрес</button>
+    <button class="button" onclick="showScreen('lobby')">Назад</button>
+  </div>
+  <div id="inventory" class="screen">
+    <h2>🎒 Інвентар</h2>
+    <button onclick="equipSkin('default')">🔴 Звичайна мішень</button>
+    <button onclick="equipSkin('blue')">🔵 Синя мішень</button>
+    <button class="button" onclick="showScreen('lobby')">Назад</button>
+  </div>
+
+  <script>
+    let score = 0;
+    let coins = parseInt(localStorage.getItem('coins')) || 0;
+    let upgrades = JSON.parse(localStorage.getItem('upgrades')) || {};
+    let leaderboardData = JSON.parse(localStorage.getItem('leaderboard')) || [];
+    let ownedSkins = JSON.parse(localStorage.getItem('skins')) || ['default'];
+    let equippedSkin = localStorage.getItem('equippedSkin') || 'default';
+    const scoreDiv = document.getElementById('score');
+    const coinsDiv = document.getElementById('coins');
+    const bgm = document.getElementById('bgm');
+    const clickSound = document.getElementById('clickSound');
+    let gameInterval;
+
+    function playClick() {
+      clickSound.currentTime = 0;
+      clickSound.play();
+    }
+
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      if (id === 'leaderboard') renderLeaderboard();
+    }
+
+    function startGame() {
+      score = 0;
+      updateUI();
+      showScreen('game');
+      spawnTargets();
+      setTimeout(endGame, 30000);
+    }
+
+    function spawnTargets() {
+      clearTargets();
+      for (let i = 0; i < 3; i++) createTarget();
+      gameInterval = setInterval(() => {
+        clearTargets();
+        for (let i = 0; i < 3; i++) createTarget();
+      }, 1500);
+    }
+
+    function createTarget() {
+      const t = document.createElement('div');
+      t.className = 'target';
+      t.style.top = Math.random() * (window.innerHeight - 60) + 'px';
+      t.style.left = Math.random() * (window.innerWidth - 60) + 'px';
+      if (equippedSkin === 'blue') t.style.background = 'blue';
+      t.onclick = () => {
+        playClick();
+        let points = upgrades.doublePoints ? 2 : 1;
+        score += points;
+        coins += points;
+        updateUI();
+        t.remove();
+      };
+      document.getElementById('game').appendChild(t);
+    }
+
+    function clearTargets() {
+      document.querySelectorAll('.target').forEach(t => t.remove());
+    }
+
+    function endGame() {
+      clearInterval(gameInterval);
+      clearTargets();
+      alert("Кінець! Твій рахунок: " + score);
+      leaderboardData.push({ name: 'Гравець', score });
+      leaderboardData.sort((a, b) => b.score - a.score);
+      leaderboardData = leaderboardData.slice(0, 5);
+      localStorage.setItem('leaderboard', JSON.stringify(leaderboardData));
+      localStorage.setItem('coins', coins);
+      showScreen('lobby');
+    }
+
+    function updateUI() {
+      scoreDiv.textContent = 'Очки: ' + score;
+      coinsDiv.textContent = 'Монети: ' + coins;
+    }
+
+    function renderLeaderboard() {
+      const lb = document.getElementById('leaderboard');
+      lb.innerHTML = '<h2>🏆 Рекорди</h2>' +
+        leaderboardData.map((e, i) => `<p>${i+1}. ${e.name}: ${e.score}</p>`).join('') +
+        '<button class="button" onclick="showScreen(\'lobby\')">Назад</button>';
+    }
+
+    function buyUpgrade(type) {
+      if (coins >= 10 && !upgrades[type]) {
+        coins -= 10;
+        upgrades[type] = true;
+        localStorage.setItem('coins', coins);
+        localStorage.setItem('upgrades', JSON.stringify(upgrades));
+        updateUI();
+        alert("Куплено!");
+      }
+    }
+
+    function buySkin(skin) {
+      if (!ownedSkins.includes(skin) && coins >= 15) {
+        coins -= 15;
+        ownedSkins.push(skin);
+        localStorage.setItem('coins', coins);
+        localStorage.setItem('skins', JSON.stringify(ownedSkins));
+        updateUI();
+        alert("Скін куплено!");
+      }
+    }
+
+    function equipSkin(skin) {
+      if (ownedSkins.includes(skin)) {
+        equippedSkin = skin;
+        localStorage.setItem('equippedSkin', skin);
+        alert("Скін застосовано!");
+      }
+    }
+
+    function toggleMusic() {
+      bgm.muted = !bgm.muted;
+      localStorage.setItem('muted', bgm.muted);
+      alert(bgm.muted ? "Музику вимкнено" : "Музику увімкнено");
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    function resetProgress() {
+      if (confirm("Скинути всі дані?")) {
+        localStorage.clear();
+        location.reload();
+      }
+    }
+
+    window.onload = () => {
+      const savedMuted = localStorage.getItem('muted');
+      if (savedMuted === 'true') bgm.muted = true;
+    };
+  </script>
+</body>
+</html>
